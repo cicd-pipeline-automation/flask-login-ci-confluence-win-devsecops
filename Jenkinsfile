@@ -69,7 +69,6 @@ pipeline {
 
         stages {
             stage('Setup Python Environment') {
-                when { expression { return params.RUN_PYTHON_SETUP } }
                 steps {
                     echo '🐍 Setting up cached Python environment...'
                     bat '''
