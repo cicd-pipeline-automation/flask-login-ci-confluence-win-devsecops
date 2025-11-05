@@ -6,9 +6,6 @@ pipeline {
     }
 
     environment {
-        // ============================
-        // 💡 Core Configuration
-        // ============================
         SMTP_HOST        = credentials('smtp-host')
         SMTP_PORT        = '587'
         SMTP_USER        = credentials('smtp-user')
@@ -37,7 +34,7 @@ pipeline {
 
     stages {
 
-        // -------------------------------
+        // -----------------------------------
         stage('Setup Encoding') {
             steps {
                 echo '🔧 Setting system encoding to UTF-8...'
@@ -52,7 +49,7 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Checkout GitHub') {
             steps {
                 echo '📦 Checking out source code from GitHub repository...'
@@ -68,7 +65,7 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Setup Python Environment') {
             steps {
                 echo '🐍 Setting up Python virtual environment...'
@@ -79,13 +76,13 @@ pipeline {
                     )
                     %VENV_PATH%\\Scripts\\python.exe -m pip install --upgrade pip
                     %VENV_PATH%\\Scripts\\pip.exe install -r requirements.txt
-                    %VENV_PATH%\\Scripts\\pip.exe install bandit safety==2.3.5 typer==0.7.0 click==8.1.7 pytest pytest-html
+                    %VENV_PATH%\\Scripts\\pip.exe install bandit safety typer click pytest pytest-html
                 '''
                 echo '✅ Python environment ready.'
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('SAST - Static Code Analysis') {
             steps {
                 echo '🔍 Running Bandit for static code analysis...'
@@ -103,13 +100,13 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Dependency Vulnerability Scan') {
             steps {
                 echo "🧩 Checking dependencies for known vulnerabilities..."
                 bat '''
                     if not exist report mkdir report
-                    %VENV_PATH%\\Scripts\\pip.exe install --upgrade safety==2.3.5 typer==0.7.0 click==8.1.7
+                    %VENV_PATH%\\Scripts\\pip.exe install --upgrade safety typer click
                     %VENV_PATH%\\Scripts\\safety.exe check --full-report > report\\dependency_vuln.txt || exit 0
                 '''
             }
@@ -120,7 +117,7 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Run Unit Tests') {
             steps {
                 echo '🧪 Running unit tests with pytest...'
@@ -139,46 +136,51 @@ pipeline {
             }
         }
 
-        // -------------------------------
-        stage('Install Docker (if missing)') {
+        // -----------------------------------
+        stage('Download & Install Docker (if missing)') {
             steps {
-                echo '🐋 Checking and installing Docker if not present...'
+                echo '🐋 Checking and installing Docker Desktop if not found...'
                 bat '''
                     @echo off
+                    setlocal enabledelayedexpansion
+                    set DOWNLOAD_URL=https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe
+                    set INSTALLER_PATH=%CD%\\tools\\DockerDesktopInstaller.exe
+
+                    if not exist tools mkdir tools
+
                     where docker >nul 2>nul
                     if %ERRORLEVEL% NEQ 0 (
-                        echo ⚙️ Docker not found. Installing prerequisites...
-                        REM === Install Chocolatey if missing ===
-                        where choco >nul 2>nul
-                        if %ERRORLEVEL% NEQ 0 (
-                            echo 📦 Installing Chocolatey...
-                            powershell -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command ^
-                              "Set-ExecutionPolicy Bypass -Scope Process -Force; ^
-                              [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; ^
-                              iwr https://community.chocolatey.org/install.ps1 -UseBasicParsing | iex"
+                        echo ⚙️ Docker not found. Preparing to download installer...
+
+                        if exist "%INSTALLER_PATH%" (
+                            echo 📦 Using cached installer at %INSTALLER_PATH%
                         ) else (
-                            echo ✅ Chocolatey already installed.
+                            echo 🌐 Downloading Docker Desktop installer from %DOWNLOAD_URL%
+                            powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+                                "(New-Object System.Net.WebClient).DownloadFile('%DOWNLOAD_URL%', '%INSTALLER_PATH%')"
                         )
 
-                        REM === Install Docker CLI + Engine ===
-                        echo 🐳 Installing Docker using Chocolatey...
-                        choco install docker-cli -y --no-progress
-                        choco install docker-engine -y --no-progress
+                        if exist "%INSTALLER_PATH%" (
+                            echo 🧩 Running Docker installer silently...
+                            start /wait "" "%INSTALLER_PATH%" install --quiet
+                            echo ✅ Docker installation completed.
+                        ) else (
+                            echo ❌ ERROR: Docker installer not found after download.
+                            exit /b 1
+                        )
 
-                        REM === Update PATH ===
-                        setx PATH "%PATH%;C:\\Program Files\\Docker;C:\\ProgramData\\chocolatey\\bin"
-                        echo ✅ Docker installed and added to PATH.
+                        setx PATH "%PATH%;C:\\Program Files\\Docker;C:\\Program Files\\Docker\\Docker\\resources\\bin"
+                        echo 🧩 Docker path updated. Jenkins restart may be required.
                     ) else (
                         echo ✅ Docker already installed.
                     )
 
-                    REM === Verify Docker ===
-                    docker --version || echo ❌ Docker not found even after installation!
+                    docker --version || echo ⚠️ Docker CLI might require a Jenkins restart.
                 '''
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Build Docker Image') {
             steps {
                 echo '🐳 Building Docker image...'
@@ -189,7 +191,7 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Container Security Scan (Trivy)') {
             steps {
                 echo '🛡️ Scanning Docker image with Trivy...'
@@ -205,7 +207,7 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Deploy for DAST Scan') {
             steps {
                 echo '🚀 Deploying temporary container for OWASP ZAP DAST...'
@@ -216,7 +218,7 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('DAST - OWASP ZAP Scan') {
             steps {
                 echo '🕵️ Running OWASP ZAP baseline scan...'
@@ -234,10 +236,10 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Generate & Publish Reports') {
             steps {
-                echo '📊 Generating final consolidated report...'
+                echo '📊 Generating and publishing reports to Confluence...'
                 bat """
                     %VENV_PATH%\\Scripts\\python.exe generate_report.py
                     %VENV_PATH%\\Scripts\\python.exe publish_report_confluence.py
@@ -253,7 +255,7 @@ pipeline {
             }
         }
 
-        // -------------------------------
+        // -----------------------------------
         stage('Send Email Notification') {
             steps {
                 echo '📧 Sending consolidated DevSecOps report...'
@@ -265,7 +267,7 @@ pipeline {
         }
     }
 
-    // -------------------------------
+    // -----------------------------------
     post {
         success {
             echo '''
@@ -293,6 +295,3 @@ pipeline {
         always {
             echo '🧹 Cleaning up workspace...'
             cleanWs()
-        }
-    }
-}
