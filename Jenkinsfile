@@ -5,10 +5,6 @@ pipeline {
         timestamps()
     }
 
-    tools {
-        python 'Python3'
-    }
-
     // -------------------------------
     // Environment Variables
     // -------------------------------
