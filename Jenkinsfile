@@ -137,45 +137,18 @@ pipeline {
         }
 
         // -----------------------------------
-        stage('Download & Install Docker (if missing)') {
+        stage('Verify Docker Installation') {
             steps {
-                echo '🐋 Checking and installing Docker Desktop if not found...'
+                echo '🐋 Checking Docker installation...'
                 bat '''
                     @echo off
-                    setlocal enabledelayedexpansion
-                    set DOWNLOAD_URL=https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe
-                    set INSTALLER_PATH=%CD%\\tools\\DockerDesktopInstaller.exe
-
-                    if not exist tools mkdir tools
-
-                    where docker >nul 2>nul
-                    if %ERRORLEVEL% NEQ 0 (
-                        echo ⚙️ Docker not found. Preparing to download installer...
-
-                        if exist "%INSTALLER_PATH%" (
-                            echo 📦 Using cached installer at %INSTALLER_PATH%
-                        ) else (
-                            echo 🌐 Downloading Docker Desktop installer from %DOWNLOAD_URL%
-                            powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-                                "(New-Object System.Net.WebClient).DownloadFile('%DOWNLOAD_URL%', '%INSTALLER_PATH%')"
-                        )
-
-                        if exist "%INSTALLER_PATH%" (
-                            echo 🧩 Running Docker installer silently...
-                            start /wait "" "%INSTALLER_PATH%" install --quiet
-                            echo ✅ Docker installation completed.
-                        ) else (
-                            echo ❌ ERROR: Docker installer not found after download.
-                            exit /b 1
-                        )
-
-                        setx PATH "%PATH%;C:\\Program Files\\Docker;C:\\Program Files\\Docker\\Docker\\resources\\bin"
-                        echo 🧩 Docker path updated. Jenkins restart may be required.
-                    ) else (
-                        echo ✅ Docker already installed.
+                    docker --version || (
+                        echo ❌ Docker is not accessible to Jenkins user!
+                        echo Please ensure Docker Desktop is installed and Jenkins service user is in the docker-users group.
+                        exit /b 1
                     )
-
-                    docker --version || echo ⚠️ Docker CLI might require a Jenkins restart.
+                    docker info | find "Server Version"
+                    echo ✅ Docker Desktop is accessible.
                 '''
             }
         }
@@ -267,7 +240,6 @@ pipeline {
         }
     }
 
-    // -----------------------------------
     post {
         success {
             echo '''
@@ -295,3 +267,6 @@ pipeline {
         always {
             echo '🧹 Cleaning up workspace...'
             cleanWs()
+        }
+    }
+}
