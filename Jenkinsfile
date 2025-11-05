@@ -192,14 +192,14 @@ pipeline {
             steps {
                 echo '🛡️ Scanning Docker image with Trivy...'
                 bat '''
-                    if not exist report mkdir report
-                    "C:\\tools\\trivy\\trivy.exe" image --exit-code 0 --severity HIGH,CRITICAL --format html --output report\\trivy_report.html %DOCKER_IMAGE%
+                if not exist report mkdir report
+                "C:\\tools\\trivy\\trivy.exe" image --exit-code 0 --severity HIGH,CRITICAL --format table --output report\\trivy_report.txt %DOCKER_IMAGE%
                 '''
                 echo '✅ Container vulnerability scan completed.'
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'report/trivy_report.html', fingerprint: true
+                archiveArtifacts artifacts: 'report/trivy_report.txt', fingerprint: true
                 }
             }
         }
