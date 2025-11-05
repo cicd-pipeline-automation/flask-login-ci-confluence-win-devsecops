@@ -5,20 +5,20 @@ pipeline {
         timestamps()
     }
 
-    // -------------------------------
-    // ✅ Skill Toggle Parameters
-    // -------------------------------
-    parameters {
-        booleanParam(name: 'RUN_SAST',                defaultValue: false, description: 'Run SAST (Bandit) scan?')
-        booleanParam(name: 'RUN_DEP_SCAN',            defaultValue: false, description: 'Run Dependency Vulnerability Scan?')
-        booleanParam(name: 'RUN_PYTHON_SETUP',        defaultValue: true,  description: 'Setup Python Environment?')
-        booleanParam(name: 'RUN_UNIT_TESTS',          defaultValue: true,  description: 'Run Unit Tests?')
-        booleanParam(name: 'RUN_DOCKER_BUILD',        defaultValue: true,  description: 'Build Docker Image?')
-        booleanParam(name: 'RUN_DEPLOY_DAST',         defaultValue: true,  description: 'Deploy for DAST Scan?')
-        booleanParam(name: 'RUN_DAST',                defaultValue: true,  description: 'Run OWASP ZAP DAST Scan?')
-        booleanParam(name: 'RUN_REPORT_PUBLISH',      defaultValue: true,  description: 'Generate & Publish Reports?')
-        booleanParam(name: 'RUN_EMAIL_NOTIFICATION',  defaultValue: true,  description: 'Send Email Notification?')
-    }
+    // // -------------------------------
+    // // ✅ Skill Toggle Parameters
+    // // -------------------------------
+    // parameters {
+    //     booleanParam(name: 'RUN_SAST',                defaultValue: false, description: 'Run SAST (Bandit) scan?')
+    //     booleanParam(name: 'RUN_DEP_SCAN',            defaultValue: false, description: 'Run Dependency Vulnerability Scan?')
+    //     booleanParam(name: 'RUN_PYTHON_SETUP',        defaultValue: true,  description: 'Setup Python Environment?')
+    //     booleanParam(name: 'RUN_UNIT_TESTS',          defaultValue: true,  description: 'Run Unit Tests?')
+    //     booleanParam(name: 'RUN_DOCKER_BUILD',        defaultValue: true,  description: 'Build Docker Image?')
+    //     booleanParam(name: 'RUN_DEPLOY_DAST',         defaultValue: true,  description: 'Deploy for DAST Scan?')
+    //     booleanParam(name: 'RUN_DAST',                defaultValue: true,  description: 'Run OWASP ZAP DAST Scan?')
+    //     booleanParam(name: 'RUN_REPORT_PUBLISH',      defaultValue: true,  description: 'Generate & Publish Reports?')
+    //     booleanParam(name: 'RUN_EMAIL_NOTIFICATION',  defaultValue: true,  description: 'Send Email Notification?')
+    // }
 
     // -------------------------------
     // Environment Variables
@@ -82,7 +82,7 @@ pipeline {
         }
 
         stage('Setup Python Environment') {
-            when { expression { return params.RUN_PYTHON_SETUP } }
+            //when { expression { return params.RUN_PYTHON_SETUP } }
             steps {
                 echo '🐍 Setting up Python virtual environment...'
                 bat '''
@@ -92,14 +92,14 @@ pipeline {
                     )
                     %VENV_PATH%\\Scripts\\python.exe -m pip install --upgrade pip
                     %VENV_PATH%\\Scripts\\pip.exe install -r requirements.txt
-                    %VENV_PATH%\\Scripts\\pip.exe install bandit safety typer click pytest pytest-html
+                    %VENV_PATH%\\Scripts\\pip.exe install bandit safety typer click pytest pytest-html fpdf beautifulsoup4
                 '''
                 echo '✅ Python environment ready.'
             }
         }
 
         stage('SAST - Static Code Analysis') {
-            when { expression { return params.RUN_SAST } }
+            //when { expression { return params.RUN_SAST } }
             steps {
                 echo '🔍 Running Bandit for static code analysis...'
                 bat """
@@ -117,7 +117,7 @@ pipeline {
         }
 
         stage('Dependency Vulnerability Scan') {
-            when { expression { return params.RUN_DEP_SCAN } }
+           // when { expression { return params.RUN_DEP_SCAN } }
             steps {
                 echo "🧩 Checking dependencies for known vulnerabilities..."
                 bat '''
@@ -134,7 +134,7 @@ pipeline {
         }
 
         stage('Run Unit Tests') {
-            when { expression { return params.RUN_UNIT_TESTS } }
+           // when { expression { return params.RUN_UNIT_TESTS } }
             steps {
                 echo '🧪 Running unit tests with pytest...'
                 bat """
@@ -168,22 +168,18 @@ pipeline {
         }
 
         stage('Build Docker Image') {
-            when { expression { return params.RUN_DOCKER_BUILD } }
             steps {
-                echo '🐳 Building Docker image...'
-                bat '''
+                echo '🐳 Building Docker image from /app directory...'
+                bat """
                     @echo off
-                    if exist Dockerfile (
-                        echo 🐋 Found Dockerfile in workspace root. Building image...
-                        docker build -t %DOCKER_IMAGE% .
-                    ) else if exist app\\Dockerfile (
-                        echo 🐋 Found Dockerfile in /app directory. Building image...
+                    if exist app\\Dockerfile (
+                        echo 🐋 Found Dockerfile in /app. Building image...
                         docker build -t %DOCKER_IMAGE% -f app\\Dockerfile .
                     ) else (
-                        echo ❌ No Dockerfile found! Please add Dockerfile in project root or app directory.
+                        echo ❌ Dockerfile not found under /app
                         exit /b 1
                     )
-                '''
+                """
                 echo '✅ Docker image built successfully.'
             }
         }
@@ -256,7 +252,7 @@ pipeline {
         }
 
         stage('Generate & Publish Reports') {
-            when { expression { return params.RUN_REPORT_PUBLISH } }
+           // when { expression { return params.RUN_REPORT_PUBLISH } }
             steps {
                 echo '📊 Generating and publishing reports to Confluence...'
                 bat '''
@@ -275,7 +271,7 @@ pipeline {
         }
 
         stage('Send Email Notification') {
-            when { expression { return params.RUN_EMAIL_NOTIFICATION } }
+           // when { expression { return params.RUN_EMAIL_NOTIFICATION } }
             steps {
                 echo '📧 Sending consolidated DevSecOps report...'
                 bat '''

@@ -1,0 +1,26 @@
+# Ignore virtual environments and Python caches
+.venv
+venv
+__pycache__
+
+# Ignore logs, test results, and reports
+*.log
+*.txt
+*.html
+*.pdf
+report/
+
+# Ignore version control and config files
+.git
+.gitignore
+.idea
+.vscode
+
+# Ignore documentation and temp files
+docs/
+*.md
+*.bak
+*.tmp
+
+# Ignore Jenkins pipeline cache
+.jenkins

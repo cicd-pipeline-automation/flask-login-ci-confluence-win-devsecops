@@ -1,0 +1,5 @@
+# .bandit
+[bandit]
+exclude: .venv,venv,tests,site-packages,__pycache__,migrations,docs
+targets: .
+skips: B101,B404
