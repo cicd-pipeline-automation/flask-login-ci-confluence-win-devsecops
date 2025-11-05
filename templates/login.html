@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Secure Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8f9fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .login-container {
+      background: #fff;
+      padding: 30px 40px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 320px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin: 10px 0 5px;
+      font-weight: bold;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      margin-top: 15px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    ul.flash-messages {
+      list-style: none;
+      padding: 0;
+    }
+    ul.flash-messages li {
+      margin: 8px 0;
+      padding: 8px;
+      border-radius: 5px;
+    }
+    li.success { background-color: #d4edda; color: #155724; }
+    li.error { background-color: #f8d7da; color: #721c24; }
+    li.warning { background-color: #fff3cd; color: #856404; }
+    li.info { background-color: #d1ecf1; color: #0c5460; }
+  </style>
+</head>
+
+<body>
+  <div class="login-container">
+    <h1>🔐 Login</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('login') }}" autocomplete="off">
+      <label for="username">Username:</label>
+      <input id="username" name="username" type="text" required placeholder="Enter username">
+
+      <label for="password">Password:</label>
+      <input id="password" name="password" type="password" required placeholder="Enter password" autocomplete="new-password">
+
+      <button type="submit">Login</button>
+    </form>
+  </div>
+</body>
+</html>

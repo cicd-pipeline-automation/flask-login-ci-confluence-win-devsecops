@@ -1,0 +1,35 @@
+# ===============================
+# 🧱 Core Web Application
+# ===============================
+Flask==2.3.3
+Werkzeug==2.3.7
+itsdangerous==2.1.2
+Jinja2==3.1.2
+
+# ===============================
+# 🧪 Testing & Reporting
+# ===============================
+pytest==8.3.3
+pytest-html==4.1.1
+beautifulsoup4==4.12.3
+matplotlib==3.9.2
+reportlab==4.2.5
+
+# ===============================
+# 🌐 API & Confluence Publishing
+# ===============================
+requests==2.32.3
+
+# ===============================
+# 🔒 DevSecOps Security Scanning
+# ===============================
+bandit==1.7.10
+safety==3.2.0
+
+# ===============================
+# 📧 Email and Utilities
+# ===============================
+certifi>=2023.7.22
+idna>=3.7
+charset-normalizer>=3.3.2
+urllib3>=2.2.3
