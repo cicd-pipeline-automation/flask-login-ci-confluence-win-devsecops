@@ -34,22 +34,17 @@ pipeline {
 
     stages {
 
-        // -----------------------------------
         stage('Setup Encoding') {
             steps {
                 echo '🔧 Setting system encoding to UTF-8...'
                 bat '''
                     @echo off
                     chcp 65001 >nul
-                    set PYTHONUTF8=1
-                    set PYTHONIOENCODING=utf-8
-                    set PYTHONLEGACYWINDOWSSTDIO=1
                     echo ✅ Windows console now using UTF-8 (code page 65001)
                 '''
             }
         }
 
-        // -----------------------------------
         stage('Checkout GitHub') {
             steps {
                 echo '📦 Checking out source code from GitHub repository...'
@@ -65,7 +60,6 @@ pipeline {
             }
         }
 
-        // -----------------------------------
         stage('Setup Python Environment') {
             steps {
                 echo '🐍 Setting up Python virtual environment...'
@@ -82,7 +76,6 @@ pipeline {
             }
         }
 
-        // -----------------------------------
         stage('SAST - Static Code Analysis') {
             steps {
                 echo '🔍 Running Bandit for static code analysis...'
@@ -100,7 +93,6 @@ pipeline {
             }
         }
 
-        // -----------------------------------
         stage('Dependency Vulnerability Scan') {
             steps {
                 echo "🧩 Checking dependencies for known vulnerabilities..."
@@ -117,7 +109,6 @@ pipeline {
             }
         }
 
-        // -----------------------------------
         stage('Run Unit Tests') {
             steps {
                 echo '🧪 Running unit tests with pytest...'
@@ -136,7 +127,6 @@ pipeline {
             }
         }
 
-        // -----------------------------------
         stage('Verify Docker Installation') {
             steps {
                 echo '🐋 Checking Docker installation...'
@@ -144,7 +134,6 @@ pipeline {
                     @echo off
                     docker --version || (
                         echo ❌ Docker is not accessible to Jenkins user!
-                        echo Please ensure Docker Desktop is installed and Jenkins service user is in the docker-users group.
                         exit /b 1
                     )
                     docker info | find "Server Version"
@@ -153,24 +142,33 @@ pipeline {
             }
         }
 
-        // -----------------------------------
+        // 🐳 UPDATED STAGE
         stage('Build Docker Image') {
             steps {
                 echo '🐳 Building Docker image...'
-                bat """
-                    docker build -t %DOCKER_IMAGE% .
-                """
+                bat '''
+                    @echo off
+                    if exist Dockerfile (
+                        echo 🐋 Found Dockerfile in workspace root. Building image...
+                        docker build -t %DOCKER_IMAGE% .
+                    ) else if exist app\\Dockerfile (
+                        echo 🐋 Found Dockerfile in /app directory. Building image...
+                        docker build -t %DOCKER_IMAGE% -f app\\Dockerfile app
+                    ) else (
+                        echo ❌ No Dockerfile found! Please add Dockerfile in project root or app directory.
+                        exit /b 1
+                    )
+                '''
                 echo '✅ Docker image built successfully.'
             }
         }
 
-        // -----------------------------------
         stage('Container Security Scan (Trivy)') {
             steps {
                 echo '🛡️ Scanning Docker image with Trivy...'
-                bat """
+                bat '''
                     trivy image --exit-code 0 --severity HIGH,CRITICAL --format html --output report\\trivy_report.html %DOCKER_IMAGE%
-                """
+                '''
                 echo '✅ Container vulnerability scan completed.'
             }
             post {
@@ -180,24 +178,22 @@ pipeline {
             }
         }
 
-        // -----------------------------------
         stage('Deploy for DAST Scan') {
             steps {
                 echo '🚀 Deploying temporary container for OWASP ZAP DAST...'
-                bat """
+                bat '''
                     docker run -d -p 5000:5000 --name flask_dast_test %DOCKER_IMAGE%
                     timeout /t 15
-                """
+                '''
             }
         }
 
-        // -----------------------------------
         stage('DAST - OWASP ZAP Scan') {
             steps {
                 echo '🕵️ Running OWASP ZAP baseline scan...'
-                bat """
+                bat '''
                     docker run --rm -v %CD%\\report:/zap/wrk owasp/zap2docker-stable zap-baseline.py -t http://localhost:5000 -r zap_dast_report.html || exit /b 0
-                """
+                '''
                 echo '✅ OWASP ZAP DAST scan completed.'
             }
             post {
@@ -209,14 +205,13 @@ pipeline {
             }
         }
 
-        // -----------------------------------
         stage('Generate & Publish Reports') {
             steps {
                 echo '📊 Generating and publishing reports to Confluence...'
-                bat """
+                bat '''
                     %VENV_PATH%\\Scripts\\python.exe generate_report.py
                     %VENV_PATH%\\Scripts\\python.exe publish_report_confluence.py
-                """
+                '''
                 echo '✅ Reports generated and published to Confluence.'
             }
             post {
@@ -228,13 +223,12 @@ pipeline {
             }
         }
 
-        // -----------------------------------
         stage('Send Email Notification') {
             steps {
                 echo '📧 Sending consolidated DevSecOps report...'
-                bat """
+                bat '''
                     %VENV_PATH%\\Scripts\\python.exe send_report_email.py
-                """
+                '''
                 echo '✅ Email with consolidated report sent.'
             }
         }
@@ -260,7 +254,7 @@ pipeline {
             ======================================
             - Review Jenkins logs for the failed stage
             - Check SAST, DAST, or container scan outputs
-            - Verify SMTP and Confluence credentials
+            - Verify Dockerfile path and credentials
             ======================================
             '''
         }
