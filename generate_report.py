@@ -187,6 +187,12 @@ def enhance_html_report():
     # Inject DevSecOps Summary
     sec_html = f"""
     <div style="background-color:#eef7ff; border:1px solid #007bff; padding:15px; margin:15px 0;">
-      <h2>🔐 DevSecOps Security Summary</h2>
-      <ul>
+    <h2>🔐 DevSecOps Security Summary</h2>
+    <ul>
         <li><b>SAST (Bandit):</b> {sec_findings['SAST_Bandit']} findings</li>
+        <li><b>Dependency Scan (Safety):</b> {sec_findings['Dependency_Scan']} findings</li>
+        <li><b>Container Scan (Trivy):</b> {sec_findings['Trivy_Scan']} findings</li>
+        <li><b>DAST (OWASP ZAP):</b> {sec_findings['DAST_ZAP']} findings</li>
+    </ul>
+    </div>
+    """

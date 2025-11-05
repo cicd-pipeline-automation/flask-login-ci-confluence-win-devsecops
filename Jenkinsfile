@@ -209,13 +209,17 @@ pipeline {
                 echo '🚀 Deploying temporary container for OWASP ZAP DAST...'
                 bat '''
                 @echo off
-                REM 🧹 Clean up any old container before starting a new one
+                REM 🧹 Cleanup previous containers/network
                 docker rm -f flask_dast_test >nul 2>&1
+                docker network rm zapnet >nul 2>&1
 
-                REM 🚀 Run a fresh container for DAST scan
-                docker run -d -p 5000:5000 --name flask_dast_test %DOCKER_IMAGE%
+                REM 🌐 Create shared Docker network
+                docker network create zapnet
 
-                REM ⏱️ Wait 15 seconds for the app to start
+                REM 🚀 Start the Flask container on this network
+                docker run -d --network zapnet -p 5000:5000 --name flask_dast_test %DOCKER_IMAGE%
+
+                REM ⏱️ Wait 15 seconds for app to initialize
                 ping -n 16 127.0.0.1 >nul
                 '''
             }
@@ -228,18 +232,13 @@ pipeline {
                 @echo off
                 if not exist report mkdir report
 
-                REM ✅ Ensure previous test container is stopped/removed before running scan
-                docker rm -f flask_dast_test >nul 2>&1
-
-                REM ✅ Run OWASP ZAP using the new GHCR image
+                REM 🧠 Run OWASP ZAP in same network as Flask app
                 docker run --rm ^
+                    --network zapnet ^
                     -v "%CD%\\report:/zap/wrk" ^
                     ghcr.io/zaproxy/zaproxy:stable zap-baseline.py ^
-                    -t http://host.docker.internal:5000 ^
+                    -t http://flask_dast_test:5000 ^
                     -r zap_dast_report.html || exit /b 0
-
-                REM ✅ Show report files for verification
-                dir report
                 '''
                 echo '✅ OWASP ZAP DAST scan completed.'
             }
@@ -247,9 +246,11 @@ pipeline {
                 always {
                 echo '📦 Archiving ZAP DAST report...'
                 archiveArtifacts artifacts: 'report/zap_dast_report.html', allowEmptyArchive: true
-
-                echo '🧹 Cleaning up DAST test container...'
-                bat 'docker rm -f flask_dast_test >nul 2>&1'
+                echo '🧹 Cleaning up...'
+                bat '''
+                    docker rm -f flask_dast_test >nul 2>&1
+                    docker network rm zapnet >nul 2>&1
+                '''
                 }
             }
         }
