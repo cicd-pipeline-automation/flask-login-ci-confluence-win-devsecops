@@ -4,7 +4,6 @@ import datetime
 from pathlib import Path
 from bs4 import BeautifulSoup
 from fpdf import FPDF
-from fpdf.html import HTMLMixin
 
 # ============================================================
 # 📦 Configuration
@@ -26,17 +25,20 @@ def read_version():
                 return 1
     return 1
 
+
 def increment_version():
     version = read_version() + 1
     with open(VERSION_FILE, "w") as f:
         f.write(str(version))
     return version
 
+
 def safe_read(file_path):
     if os.path.exists(file_path):
         with open(file_path, encoding="utf-8", errors="ignore") as f:
             return f.read()
     return ""
+
 
 def extract_summary():
     summary = {}
@@ -55,6 +57,7 @@ def extract_summary():
         summary["rate"] = round(rate, 1)
     else:
         summary.update({"passed": 0, "failed": 0, "errors": 0, "skipped": 0, "rate": 0})
+
     summary["bandit_findings"] = len(re.findall(r"<tr class=\"issue\">", safe_read(REPORT_DIR / "bandit_report.html")))
     summary["dep_vuln"] = len(re.findall(r"\|", safe_read(REPORT_DIR / "dependency_vuln.txt")))
     summary["trivy_high"] = len(re.findall(r"High", safe_read(REPORT_DIR / "trivy_report.txt")))
@@ -113,14 +116,21 @@ def generate_html(summary, version):
     </body>
     </html>
     """
+
     html_file = REPORT_DIR / f"{BASE_NAME}_v{version}.html"
     html_file.write_text(html, encoding="utf-8")
     return html_file
 
 # ============================================================
-# 🧾 PDF Report Generator (HTML + Header/Footer)
+# 🧾 PDF Report Generator (Unicode + Header/Footer)
 # ============================================================
-class PDF(FPDF, HTMLMixin):
+class PDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        # Register font BEFORE first page
+        self.add_font("DejaVu", "", "DejaVuSans.ttf")
+        self.set_font("DejaVu", "", 12)
+
     def header(self):
         self.set_font("DejaVu", "", 10)
         self.cell(0, 10, "Jenkins DevSecOps Automated Report", align="C", ln=True)
@@ -129,14 +139,13 @@ class PDF(FPDF, HTMLMixin):
     def footer(self):
         self.set_y(-15)
         self.set_font("DejaVu", "", 9)
-        self.cell(0, 10, f"Page {self.page_no()} / Generated {datetime.datetime.now():%Y-%m-%d %H:%M:%S}", align="C")
+        self.cell(0, 10, f"Page {self.page_no()}", align="C")
 
 def html_to_pdf(html_file, version):
     pdf = PDF()
     pdf.add_page()
-    pdf.add_font("DejaVu", "", "DejaVuSans.ttf")
-    pdf.set_font("DejaVu", "", 12)
-    pdf.write_html(html_file.read_text(encoding="utf-8"))
+    soup = BeautifulSoup(html_file.read_text(encoding="utf-8"), "html.parser")
+    pdf.multi_cell(0, 10, soup.get_text())
     pdf_file = REPORT_DIR / f"{BASE_NAME}_v{version}.pdf"
     pdf.output(str(pdf_file))
     print(f"✅ PDF generated: {pdf_file}")
@@ -152,3 +161,4 @@ if __name__ == "__main__":
     pdf_file = html_to_pdf(html_file, version)
     print(f"✅ HTML Report: {html_file}")
     print(f"✅ PDF Report: {pdf_file}")
+    print(f"🆙 Version updated: {version}")
