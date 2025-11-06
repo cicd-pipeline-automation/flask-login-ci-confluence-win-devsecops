@@ -1,113 +1,172 @@
 import os
-import json
-from pathlib import Path
 import requests
-import glob
+from requests.auth import HTTPBasicAuth
+from datetime import datetime
+from pathlib import Path
 
 # ============================================================
-# 🔐 Configuration
+# ⚙️ Configuration
 # ============================================================
-CONFLUENCE_BASE  = os.getenv("CONFLUENCE_BASE", "").rstrip("/")
-CONFLUENCE_USER  = os.getenv("CONFLUENCE_USER", "")
-CONFLUENCE_TOKEN = os.getenv("CONFLUENCE_TOKEN", "")
+CONFLUENCE_BASE  = os.getenv("CONFLUENCE_BASE")
+CONFLUENCE_USER  = os.getenv("CONFLUENCE_USER")
+CONFLUENCE_TOKEN = os.getenv("CONFLUENCE_TOKEN")
 CONFLUENCE_SPACE = os.getenv("CONFLUENCE_SPACE", "DEMO")
-CONFLUENCE_TITLE = os.getenv("CONFLUENCE_TITLE", "DevSecOps Report")
+CONFLUENCE_PARENT_TITLE = os.getenv("CONFLUENCE_TITLE", "DevSecOps Test Result Report")
 
 REPORT_DIR = Path("report")
-AUTH = (CONFLUENCE_USER, CONFLUENCE_TOKEN)
-HEADERS_JSON = {"Content-Type": "application/json"}
-HEADERS_UPLOAD = {"X-Atlassian-Token": "no-check"}
+AUTH = HTTPBasicAuth(CONFLUENCE_USER, CONFLUENCE_TOKEN)
+HEADERS = {"Content-Type": "application/json"}
+
 
 # ============================================================
-# 🧠 Confluence Helpers
+# 🔍 Helper Functions
 # ============================================================
-def get_page(space, title):
+def safe_read(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    return ""
+
+
+def get_page_id(title, space):
+    """Return page ID if it exists."""
     url = f"{CONFLUENCE_BASE}/rest/api/content"
-    params = {"title": title, "spaceKey": space, "expand": "version"}
-    resp = requests.get(url, headers=HEADERS_JSON, auth=AUTH, params=params)
-    resp.raise_for_status()
-    data = resp.json()
-    if data.get("size", 0) > 0:
-        return data["results"][0]["id"], data["results"][0]["version"]["number"]
-    return None, None
+    params = {"spaceKey": space, "title": title}
+    r = requests.get(url, params=params, auth=AUTH)
+    if r.status_code == 200 and r.json().get("results"):
+        return r.json()["results"][0]["id"]
+    return None
 
-def update_or_create_page(space, title, body_html):
-    pid, ver = get_page(space, title)
-    if pid:
-        url = f"{CONFLUENCE_BASE}/rest/api/content/{pid}"
-        payload = {
-            "id": pid,
-            "type": "page",
-            "title": title,
-            "version": {"number": ver + 1},
-            "body": {"storage": {"value": body_html, "representation": "storage"}},
-        }
-        resp = requests.put(url, headers=HEADERS_JSON, auth=AUTH, data=json.dumps(payload))
-        resp.raise_for_status()
-        print(f"✅ Updated Confluence page (v{ver + 1})")
-        return pid
-    else:
-        url = f"{CONFLUENCE_BASE}/rest/api/content"
-        payload = {
-            "type": "page",
-            "title": title,
-            "space": {"key": space},
-            "body": {"storage": {"value": body_html, "representation": "storage"}},
-        }
-        resp = requests.post(url, headers=HEADERS_JSON, auth=AUTH, data=json.dumps(payload))
-        resp.raise_for_status()
-        pid = resp.json()["id"]
-        print(f"✅ Created new Confluence page: {pid}")
-        return pid
 
-def upload_or_update_attachment(page_id, file_path):
-    name = file_path.name
-    check = requests.get(f"{CONFLUENCE_BASE}/rest/api/content/{page_id}/child/attachment",
-                         params={"filename": name, "expand": "version"},
-                         headers=HEADERS_JSON, auth=AUTH)
-    with open(file_path, "rb") as f:
-        files = {"file": (name, f)}
-        if check.status_code == 200 and check.json().get("size", 0) > 0:
-            attach_id = check.json()["results"][0]["id"]
-            r = requests.put(
-                f"{CONFLUENCE_BASE}/rest/api/content/{attach_id}/data",
-                headers=HEADERS_UPLOAD, files=files, auth=AUTH)
-        else:
-            r = requests.post(
-                f"{CONFLUENCE_BASE}/rest/api/content/{page_id}/child/attachment",
-                headers=HEADERS_UPLOAD, files=files, auth=AUTH)
+def create_page(title, body, space, parent_id=None):
+    """Create a new Confluence page."""
+    url = f"{CONFLUENCE_BASE}/rest/api/content/"
+    payload = {
+        "type": "page",
+        "title": title,
+        "space": {"key": space},
+        "body": {"storage": {"value": body, "representation": "storage"}},
+    }
+    if parent_id:
+        payload["ancestors"] = [{"id": parent_id}]
+    r = requests.post(url, json=payload, auth=AUTH, headers=HEADERS)
     if r.status_code in (200, 201):
-        print(f"📄 Uploaded/Updated: {name}")
+        page_id = r.json()["id"]
+        print(f"✅ Created page: {title} (ID: {page_id})")
+        return page_id
     else:
-        print(f"⚠️ Failed {name}: {r.status_code} - {r.text}")
+        print(f"❌ Failed to create page '{title}': {r.status_code} - {r.text}")
+        return None
 
-def build_page_body():
-    version_txt = (REPORT_DIR / "version.txt").read_text().strip() if (REPORT_DIR / "version.txt").exists() else "N/A"
+
+def update_page(page_id, title, body, version):
+    """Update an existing Confluence page."""
+    url = f"{CONFLUENCE_BASE}/rest/api/content/{page_id}"
+    payload = {
+        "id": page_id,
+        "type": "page",
+        "title": title,
+        "version": {"number": version + 1},
+        "body": {"storage": {"value": body, "representation": "storage"}},
+    }
+    r = requests.put(url, json=payload, auth=AUTH, headers=HEADERS)
+    if r.status_code in (200, 201):
+        print(f"✅ Updated page '{title}' to version {version + 1}")
+    else:
+        print(f"❌ Failed to update page '{title}': {r.status_code} - {r.text}")
+
+
+def upload_attachment(page_id, file_path):
+    """Attach or replace files on a Confluence page."""
+    file_name = os.path.basename(file_path)
+    url = f"{CONFLUENCE_BASE}/rest/api/content/{page_id}/child/attachment"
+    headers = {"X-Atlassian-Token": "no-check"}
+    with open(file_path, "rb") as f:
+        files = {"file": (file_name, f, "application/octet-stream")}
+        r = requests.post(url, files=files, auth=AUTH, headers=headers)
+        if r.status_code in (200, 201):
+            print(f"📎 Uploaded attachment: {file_name}")
+        elif "same file name" in r.text:
+            # Replace existing file content
+            attach_url = f"{url}?filename={file_name}"
+            get_resp = requests.get(attach_url, auth=AUTH)
+            if get_resp.status_code == 200 and get_resp.json().get("results"):
+                attach_id = get_resp.json()["results"][0]["id"]
+                update_url = f"{CONFLUENCE_BASE}/rest/api/content/{attach_id}/data"
+                requests.post(update_url, files=files, auth=AUTH, headers=headers)
+                print(f"↻ Updated existing attachment: {file_name}")
+        else:
+            print(f"⚠️ Failed to upload {file_name}: {r.status_code} - {r.text}")
+
+
+# ============================================================
+# 🧠 Page Content Builders
+# ============================================================
+def build_child_page_body(version):
     return f"""
-    <h1>DevSecOps Test & Security Reports</h1>
-    <p><b>Version:</b> {version_txt}</p>
-    <p>This page is automatically updated by Jenkins with the latest test and security results.</p>
-    <p><i>Generated automatically by the Jenkins DevSecOps Pipeline.</i></p>
+    <h2>DevSecOps Test & Security Report v{version}</h2>
+    <p><b>Generated:</b> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+    <p>This page contains all test & security reports generated from Jenkins.</p>
+    <p><i>All related artifacts are attached below.</i></p>
     """
 
-# ============================================================
-# 🚀 Main
-# ============================================================
-def main():
-    pid = update_or_create_page(CONFLUENCE_SPACE, CONFLUENCE_TITLE, build_page_body())
-    for pattern in [
-        "bandit_report.html",
-        "dependency_vuln.txt",
-        "report.html",
-        "test_result_report_v*.html",
-        "test_result_report_v*.pdf",
-        "trivy_report.txt",
-        "version.txt",
-        "zap_dast_report.html"
-    ]:
-        for file in glob.glob(str(REPORT_DIR / pattern)):
-            upload_or_update_attachment(pid, Path(file))
-    print("✅ Report successfully published to Confluence.")
 
+def build_parent_page_body():
+    """Rebuild the parent page with links to all report versions."""
+    url = f"{CONFLUENCE_BASE}/rest/api/content"
+    params = {"spaceKey": CONFLUENCE_SPACE, "limit": 200}
+    r = requests.get(url, params=params, auth=AUTH)
+    links = ""
+    if r.status_code == 200:
+        for page in r.json().get("results", []):
+            title = page["title"]
+            if title.startswith("Test Result Report v"):
+                page_id = page["id"]
+                links += f'<li><a href="{CONFLUENCE_BASE}/pages/{page_id}/{title.replace(" ", "+")}">{title}</a></li>'
+    body = f"""
+    <h1>DevSecOps Test & Security Reports</h1>
+    <p>This page is automatically updated by Jenkins with links to all versioned reports.</p>
+    <ul>{links}</ul>
+    <p><i>Generated automatically by the Jenkins DevSecOps Pipeline.</i></p>
+    """
+    return body
+
+
+# ============================================================
+# 🚀 Main Logic
+# ============================================================
 if __name__ == "__main__":
-    main()
+    version = "N/A"
+    vf = REPORT_DIR / "version.txt"
+    if vf.exists():
+        version = vf.read_text().strip()
+
+    # Detect PASS/FAIL status from pytest output
+    pytest_output = safe_read(REPORT_DIR / "pytest_output.txt")
+    status = "PASS" if "failed" not in pytest_output.lower() else "FAIL"
+
+    # Get or create parent index page
+    parent_id = get_page_id(CONFLUENCE_PARENT_TITLE, CONFLUENCE_SPACE)
+    if not parent_id:
+        parent_id = create_page(
+            CONFLUENCE_PARENT_TITLE,
+            "<p>Index page for all DevSecOps reports.</p>",
+            CONFLUENCE_SPACE,
+        )
+
+    # Create new child page
+    child_title = f"Test Result Report v{version} ({status})"
+    child_body = build_child_page_body(version)
+    child_id = create_page(child_title, child_body, CONFLUENCE_SPACE, parent_id)
+
+    # Upload all report artifacts to the child page
+    if child_id:
+        for file in REPORT_DIR.glob("*"):
+            if file.is_file():
+                upload_attachment(child_id, str(file))
+
+    # Update parent index page
+    if parent_id:
+        body = build_parent_page_body()
+        update_page(parent_id, CONFLUENCE_PARENT_TITLE, body, version=1)
+        print("✅ Parent index page updated successfully.")
