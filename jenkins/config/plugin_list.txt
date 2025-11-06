@@ -1,0 +1,131 @@
+# ================================================
+# 🧱 Jenkins Plugin List for DevSecOps CI/CD Pipeline
+# ================================================
+# These plugins support Python, Docker, GitHub, Confluence,
+# and email notification automation in a secure CI/CD flow.
+# --------------------------------------------------------
+
+# === Core Pipeline Plugins ===
+workflow-aggregator
+workflow-job
+pipeline-build-step
+pipeline-input-step
+pipeline-model-api
+pipeline-model-definition
+pipeline-rest-api
+pipeline-stage-step
+pipeline-stage-tags-metadata
+pipeline-utility-steps
+workflow-basic-steps
+workflow-cps
+workflow-cps-global-lib
+workflow-durable-task-step
+workflow-multibranch
+workflow-scm-step
+workflow-support
+
+# === SCM & GitHub Integration ===
+git
+git-client
+github
+github-api
+github-branch-source
+scm-api
+credentials
+credentials-binding
+ssh-credentials
+plain-credentials
+
+# === Build & Environment Management ===
+envinject
+configuration-as-code
+parameterized-trigger
+matrix-project
+token-macro
+
+# === Docker Integration ===
+docker-plugin
+docker-commons
+docker-workflow
+cloudbees-docker-custom-build-environment
+
+# === Security & DevSecOps Tools ===
+warnings-ng
+trivy-scanner
+dependency-check-jenkins-plugin
+anchore-container-scanner
+checkmarx
+sonar
+htmlpublisher
+
+# === Notifications & Reporting ===
+email-ext
+mailer
+publish-over
+publish-over-ssh
+office-365-connector
+slack
+matrix-auth
+dashboard-view
+build-monitor-plugin
+
+# === Confluence Integration ===
+atlassian-confluence-publisher
+http_request
+generic-webhook-trigger
+
+# === Utility & Visualization ===
+build-timeout
+timestamper
+ansicolor
+console-column-plugin
+simple-theme-plugin
+blueocean
+blueocean-dashboard
+blueocean-pipeline-api-impl
+blueocean-rest
+blueocean-rest-impl
+blueocean-jwt
+blueocean-web
+blueocean-config
+blueocean-git-pipeline
+blueocean-display-url
+view-job-filters
+favorite
+job-dsl
+rebuild
+
+# === Python & Virtual Env ===
+shiningpanda
+toolenv
+pyenv-pipeline
+pyenv
+
+# === Artifact & Archive Management ===
+artifactdeployer
+copyartifact
+compress-artifacts
+
+# === Credentials & Secrets ===
+mask-passwords
+credentials-binding
+hashicorp-vault-plugin
+aws-credentials
+
+# === Additional Useful Plugins ===
+ws-cleanup
+workflow-multibranch
+extended-choice-parameter
+lockable-resources
+throttle-concurrents
+node-iterator-api
+
+# ================================================
+# ✅ Installation Tip:
+# 1️⃣ Place this file in jenkins/config/plugin_list.txt
+# 2️⃣ Run the following CLI command on your Jenkins master:
+#
+#     jenkins-plugin-cli --plugin-file jenkins/config/plugin_list.txt
+#
+# 3️⃣ Restart Jenkins after all plugins are installed.
+# ================================================

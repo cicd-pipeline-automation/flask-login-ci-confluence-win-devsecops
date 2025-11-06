@@ -1,0 +1,261 @@
+// ============================================================
+// 🌐 Jenkins Declarative Pipeline
+// 🛡️ DevSecOps CI/CD Pipeline for Flask App with Confluence Integration
+// ============================================================
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    // ============================================================
+    // 🔐 Global Environment Variables
+    // ============================================================
+    environment {
+        // SMTP / Email
+        SMTP_HOST        = credentials('smtp-host')
+        SMTP_PORT        = '587'
+        SMTP_USER        = credentials('smtp-user')
+        SMTP_PASS        = credentials('smtp-pass')
+        REPORT_FROM      = credentials('sender-email')
+        REPORT_TO        = credentials('receiver-email')
+
+        // Confluence
+        CONFLUENCE_BASE  = credentials('confluence-base')
+        CONFLUENCE_USER  = credentials('confluence-user')
+        CONFLUENCE_TOKEN = credentials('confluence-token')
+        CONFLUENCE_SPACE = 'DEMO'
+        CONFLUENCE_TITLE = 'DevSecOps Test Result Report'
+
+        // GitHub
+        GITHUB_CREDENTIALS = credentials('github-credentials')
+
+        // Paths & Config
+        REPORT_DIR    = 'report'
+        VERSION_FILE  = 'report/version.txt'
+        VENV_PATH     = '.venv'
+        DOCKER_IMAGE  = 'devsecops-demo:latest'
+        PIP_CACHE_DIR = "${WORKSPACE}\\pip_cache"
+
+        // Encoding Fixes
+        PYTHONUTF8               = '1'
+        PYTHONIOENCODING         = 'utf-8'
+        PYTHONLEGACYWINDOWSSTDIO = '1'
+    }
+
+    // ============================================================
+    // 🧩 Pipeline Stages
+    // ============================================================
+    stages {
+
+        // -----------------------------
+        stage('🔧 Setup UTF-8 Encoding') {
+            steps {
+                bat '''
+                    chcp 65001 >nul
+                    echo ✅ Windows console switched to UTF-8 encoding.
+                '''
+            }
+        }
+
+        // -----------------------------
+        stage('📦 Checkout Repository') {
+            steps {
+                echo 'Fetching latest source from GitHub...'
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/devopsuser8413/flask-login-ci-confluence-win-devsecops.git',
+                        credentialsId: 'github-credentials'
+                    ]]
+                ])
+                echo '✅ Source code checkout complete.'
+            }
+        }
+
+        // -----------------------------
+        stage('🐍 Setup Python Virtual Environment') {
+            steps {
+                echo 'Preparing Python environment...'
+                bat '''
+                    if not exist "%PIP_CACHE_DIR%" mkdir "%PIP_CACHE_DIR%"
+                    if not exist "%VENV_PATH%" (
+                        python -m venv %VENV_PATH%
+                    )
+                    %VENV_PATH%\\Scripts\\python.exe -m pip install --upgrade pip
+                    %VENV_PATH%\\Scripts\\pip.exe install --cache-dir "%PIP_CACHE_DIR%" -r jenkins\\scripts\\requirements.txt
+                '''
+                echo '✅ Python environment ready.'
+            }
+        }
+
+        // -----------------------------
+        stage('🛡️ SAST - Bandit Security Scan') {
+            steps {
+                echo 'Running Bandit static code analysis...'
+                bat '''
+                    if not exist report mkdir report
+                    %VENV_PATH%\\Scripts\\bandit.exe -r . -c jenkins\\config\\bandit.yml -f html -o report\\bandit_report.html || exit /b 0
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'report/bandit_report.html', fingerprint: true
+                }
+            }
+        }
+
+        // -----------------------------
+        stage('🧩 Dependency Vulnerability Scan') {
+            steps {
+                echo 'Scanning dependencies for vulnerabilities...'
+                bat '''
+                    if not exist report mkdir report
+                    %VENV_PATH%\\Scripts\\safety.exe check --full-report > report\\dependency_vuln.txt || exit 0
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'report/dependency_vuln.txt', allowEmptyArchive: true
+                }
+            }
+        }
+
+        // -----------------------------
+        stage('🧪 Run Unit Tests (Pytest)') {
+            steps {
+                echo 'Executing Pytest suite...'
+                bat '''
+                    if not exist report mkdir report
+                    %VENV_PATH%\\Scripts\\python.exe -m pytest --html=report\\report.html --self-contained-html > report\\pytest_output.txt 2>&1 || exit /b 0
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'report/report.html', fingerprint: true
+                }
+            }
+        }
+
+        // -----------------------------
+        stage('🐳 Build Docker Image') {
+            steps {
+                echo 'Building Docker image...'
+                bat '''
+                    if exist Dockerfile (
+                        docker build -t %DOCKER_IMAGE% -f Dockerfile .
+                    ) else (
+                        echo ❌ ERROR: Dockerfile not found!
+                        exit /b 1
+                    )
+                '''
+                echo '✅ Docker image built successfully.'
+            }
+        }
+
+        // -----------------------------
+        stage('🛡️ Container Scan (Trivy)') {
+            steps {
+                echo 'Performing Trivy image scan...'
+                bat '''
+                    if not exist report mkdir report
+                    "C:\\tools\\trivy\\trivy.exe" image --exit-code 0 --severity HIGH,CRITICAL --format table --output report\\trivy_report.txt %DOCKER_IMAGE%
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'report/trivy_report.txt', fingerprint: true
+                }
+            }
+        }
+
+        // -----------------------------
+        stage('🕵️ DAST - OWASP ZAP Baseline Scan') {
+            steps {
+                echo 'Running OWASP ZAP DAST scan...'
+                bat '''
+                    docker rm -f flask_dast_test >nul 2>&1
+                    docker network rm zapnet >nul 2>&1
+                    docker network create zapnet
+                    docker run -d --network zapnet -p 5000:5000 --name flask_dast_test %DOCKER_IMAGE%
+                    ping -n 16 127.0.0.1 >nul
+                    if not exist report mkdir report
+                    docker run --rm --network zapnet -v "%CD%\\report:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://flask_dast_test:5000 -r zap_dast_report.html || exit /b 0
+                    docker rm -f flask_dast_test >nul 2>&1
+                    docker network rm zapnet >nul 2>&1
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'report/zap_dast_report.html', allowEmptyArchive: true
+                }
+            }
+        }
+
+        // -----------------------------
+        stage('📊 Generate & Publish Reports to Confluence') {
+            steps {
+                echo 'Generating DevSecOps reports and publishing to Confluence...'
+                bat '''
+                    %VENV_PATH%\\Scripts\\python.exe -m pip install --upgrade fpdf2 beautifulsoup4 requests
+                    %VENV_PATH%\\Scripts\\python.exe jenkins\\scripts\\generate_report.py
+                    %VENV_PATH%\\Scripts\\python.exe jenkins\\scripts\\publish_report_confluence.py
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'report/test_result_report_v*.html', fingerprint: true
+                    archiveArtifacts artifacts: 'report/test_result_report_v*.pdf', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'report/version.txt', fingerprint: true
+                }
+            }
+        }
+
+        // -----------------------------
+        stage('🔗 Resolve Confluence Link & Send Email') {
+            steps {
+                echo 'Fetching latest Confluence page link and sending email...'
+                bat '''
+                    %VENV_PATH%\\Scripts\\python.exe jenkins\\scripts\\resolve_confluence_link.py
+                    %VENV_PATH%\\Scripts\\python.exe jenkins\\scripts\\send_report_email.py
+                '''
+            }
+        }
+    }
+
+    // ============================================================
+    // 🧹 Post-Build Actions
+    // ============================================================
+    post {
+        success {
+            echo '''
+            ✅ PIPELINE SUCCESS
+            ===========================================
+            ✔️ Code Scanned (Bandit, Safety)
+            ✔️ Containers Verified (Trivy, ZAP)
+            ✔️ Reports Published to Confluence
+            ✔️ Notification Email Sent
+            ===========================================
+            '''
+        }
+        failure {
+            echo '''
+            ❌ PIPELINE FAILED
+            ===========================================
+            ⚠️ Review Jenkins logs for root cause.
+            ⚠️ Verify Docker & Python environments.
+            ⚠️ Check credentials or API tokens.
+            ===========================================
+            '''
+        }
+        always {
+            echo '🧹 Cleaning up Jenkins workspace...'
+            cleanWs()
+        }
+    }
+}
