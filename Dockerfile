@@ -10,6 +10,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Install essential tools (curl used in HEALTHCHECK)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Copy requirements.txt from root
 COPY requirements.txt .
 
@@ -34,7 +37,8 @@ ENV FLASK_ENV=production
 ENV FLASK_DEBUG=False
 
 # Healthcheck for CI/CD
-HEALTHCHECK CMD curl --fail http://localhost:5000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl --fail http://localhost:5000/health || exit 1
 
 # Run Flask app
 CMD ["python", "app.py"]
