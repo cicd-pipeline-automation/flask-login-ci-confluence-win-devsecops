@@ -306,6 +306,7 @@ pipeline {
                 echo '✅ Email with consolidated report sent.'
             }
         }
+    }
 
     post {
         success {
