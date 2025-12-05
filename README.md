@@ -4,7 +4,7 @@ This project demonstrates a complete **DevSecOps CI/CD automation**
 integrating code scanning, containerization, security validation, and
 automated report publishing to **Confluence** with email notifications.
 
-------------------------------------------------------------------------
+--------------------------------------------------------------------------
 
 ## 📦 1. Software Installation Steps
 
